@@ -26,6 +26,34 @@ import {
 } from "./src/yolo.js";
 import { registerPreRenderEdit } from "./src/pre-render-edit.js";
 
+const CONFIRM_MAX_LINES = 12;
+const CONFIRM_LINE_WIDTH = 60;
+
+/**
+ * Truncates a bash command for display in a confirm dialog.
+ * Each physical line is counted as ceil(line.length / CONFIRM_LINE_WIDTH) visual lines.
+ * If the total visual line count exceeds CONFIRM_MAX_LINES, the output is truncated
+ * and a summary of the omitted lines is appended.
+ */
+function truncateCommandForConfirm(command: string): string {
+  const physicalLines = command.split("\n");
+  const kept: string[] = [];
+  let visualCount = 0;
+
+  for (const line of physicalLines) {
+    const visualLines = Math.ceil(line.length / CONFIRM_LINE_WIDTH) || 1;
+    if (visualCount + visualLines > CONFIRM_MAX_LINES) {
+      const remaining = physicalLines.length - kept.length;
+      kept.push(`… (${remaining} more ${remaining === 1 ? "line" : "lines"})`);
+      break;
+    }
+    kept.push(line);
+    visualCount += visualLines;
+  }
+
+  return kept.join("\n");
+}
+
 export default function (pi: ExtensionAPI) {
   let safePrefixes = DEFAULT_SAFE_PREFIXES;
   let dangerousRegexes = DEFAULT_DANGEROUS_PATTERNS.map((p) => new RegExp(p));
@@ -95,7 +123,7 @@ export default function (pi: ExtensionAPI) {
       const command = event.input.command as string;
       if (isSafeCommand(command, safePrefixes, dangerousRegexes, segmentDangerousRegexes)) return undefined;
 
-      const confirmed = await ctx.ui.confirm("Run command?", command);
+      const confirmed = await ctx.ui.confirm("Run command?", truncateCommandForConfirm(command));
       if (!confirmed) return { block: true, reason: "Blocked by user" };
     }
 
