@@ -37,7 +37,8 @@ export function renderStatus(
 ): string {
   if (state.mode === "off") return theme.fg("dim", YOLO_LABELS.off);
   if (state.mode === "writes") return theme.fg("warning", YOLO_LABELS.writes);
-  return theme.fg("error", YOLO_LABELS.full);
+  if (state.mode === "roam") return theme.fg("warning", YOLO_LABELS.roam);
+  return theme.fg("error", YOLO_LABELS.yolo);
 }
 
 /** Cycle mode, persist to session, and notify the user. */
@@ -60,7 +61,9 @@ export function cycleYoloMode(
   if (state.mode === "off") {
     ctx.ui.notify(`${label} — all mutations require confirmation`, "info");
   } else if (state.mode === "writes") {
-    ctx.ui.notify(`${label} — write/edit auto-approved; bash still guarded`, "info");
+    ctx.ui.notify(`${label} — write/edit auto-approved; bash still guarded; project root enforced`, "info");
+  } else if (state.mode === "roam") {
+    ctx.ui.notify(`${label} — write/edit auto-approved everywhere; bash still guarded`, "info");
   } else {
     ctx.ui.notify(`${label} — ALL tool calls auto-approved, no confirmations`, "info");
   }

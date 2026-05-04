@@ -9,13 +9,17 @@
  *   segment -- checked per segment (sh/bash as commands, find -exec/-delete, system() calls)
  * Stderr redirects such as 2>/dev/null are allowed. Both pattern sets are configurable.
  *
- * YOLO modes (toggle with /yolo or ctrl+y):
- *   off        — default: confirm all writes/edits/bash (safe bash commands auto-approved)
- *   writes     — auto-allow all write/edit; bash still follows safe-prefix rules
- *   full       — auto-allow everything: write, edit, and all bash commands
+ * Modes (toggle with /yolo or ctrl+y):
+ *   off        — default: confirm all writes/edits/bash (safe bash auto-approved); project root enforced
+ *   writes     — write/edit auto-approved inside project root; outside root needs confirm; bash still guarded
+ *   roam       — write/edit auto-approved everywhere; bash still guarded
+ *   yolo       — everything auto-approved, no confirmations
+ *
+ * Protected paths (.env, .git/, node_modules/, etc.) are always blocked regardless of mode.
  */
 
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import * as nodePath from "node:path";
 import { loadConfig, DEFAULT_SAFE_PREFIXES, DEFAULT_DANGEROUS_PATTERNS, DEFAULT_SEGMENT_DANGEROUS_PATTERNS } from "./src/config.js";
 import { isSafeCommand } from "./src/safety.js";
 import {
@@ -58,6 +62,8 @@ export default function (pi: ExtensionAPI) {
   let safePrefixes = DEFAULT_SAFE_PREFIXES;
   let dangerousRegexes = DEFAULT_DANGEROUS_PATTERNS.map((p) => new RegExp(p));
   let segmentDangerousRegexes = DEFAULT_SEGMENT_DANGEROUS_PATTERNS.map((p) => new RegExp(p));
+  let protectedPaths: string[] = [];
+  let projectRoot = process.cwd();
   const yolo = createYoloState();
 
   // --- Session start: restore mode + reload config ---
@@ -67,6 +73,8 @@ export default function (pi: ExtensionAPI) {
     safePrefixes = config.safePrefixes;
     dangerousRegexes = config.dangerousRegexes;
     segmentDangerousRegexes = config.segmentDangerousRegexes;
+    protectedPaths = config.protectedPaths;
+    projectRoot = ctx.cwd;
 
     restoreYoloMode(ctx.sessionManager.getEntries(), yolo);
 
@@ -84,12 +92,12 @@ export default function (pi: ExtensionAPI) {
   };
 
   pi.registerCommand("yolo", {
-    description: "Cycle YOLO mode: off → writes-yolo → full-yolo → off",
+    description: "Cycle mode: off → writes → roam → yolo → off",
     handler: cycleHandler,
   });
 
   pi.registerShortcut("ctrl+y", {
-    description: "Cycle YOLO mode: off → writes-yolo → full-yolo → off",
+    description: "Cycle mode: off → writes → roam → yolo → off",
     handler: async (ctx) => cycleYoloMode(yolo, pi, ctx),
   });
 
@@ -98,26 +106,51 @@ export default function (pi: ExtensionAPI) {
   pi.on("tool_call", async (event, ctx) => {
     const { toolName } = event;
 
-    if (toolName === "write") {
-      if (yolo.mode === "writes" || yolo.mode === "full") return undefined;
+    if (toolName === "write" || toolName === "edit") {
+      const rawPath = event.input.path as string;
+
+      // Always block writes to protected paths, regardless of YOLO mode
+      const isProtected = protectedPaths.some((p) => rawPath.includes(p));
+      if (isProtected) {
+        if (ctx.hasUI) {
+          ctx.ui.notify(`Blocked write to protected path: ${rawPath}`, "warning");
+        }
+        return { block: true, reason: `Path "${rawPath}" is protected` };
+      }
+
+      // In writes/roam/yolo modes writes are auto-approved (after protected check)
+      if (yolo.mode === "writes" || yolo.mode === "roam" || yolo.mode === "yolo") {
+        // In writes mode: enforce project root (soft gate via confirm)
+        if (yolo.mode === "writes") {
+          const resolvedPath = nodePath.resolve(ctx.cwd, rawPath);
+          const root = projectRoot;
+          if (!resolvedPath.startsWith(root + nodePath.sep) && resolvedPath !== root) {
+            if (!ctx.hasUI) return { block: true, reason: `Path "${resolvedPath}" is outside project root` };
+            const confirmed = await ctx.ui.confirm(
+              "Write outside project root?",
+              `${rawPath}\n\nProject root: ${root}`,
+            );
+            if (!confirmed) return { block: true, reason: "Blocked by user" };
+          }
+        }
+        return undefined;
+      }
+
+      // off mode: confirm everything
       if (!ctx.hasUI) return { block: true, reason: "Blocked by user" };
 
-      const path = event.input.path as string;
-      const content = (event.input.content as string) ?? "";
-      const lines = content.split("\n").length;
-
-      const confirmed = await ctx.ui.confirm("Write file?", `${path} (${lines} lines)`);
-      if (!confirmed) return { block: true, reason: "Blocked by user" };
-
-    } else if (toolName === "edit") {
-      if (yolo.mode === "writes" || yolo.mode === "full") return undefined;
-      if (!ctx.hasUI) return { block: true, reason: "Blocked by user" };
-
-      const confirmed = await ctx.ui.confirm("Edit file?", event.input.path as string);
-      if (!confirmed) return { block: true, reason: "Blocked by user" };
+      if (toolName === "write") {
+        const content = (event.input.content as string) ?? "";
+        const lines = content.split("\n").length;
+        const confirmed = await ctx.ui.confirm("Write file?", `${rawPath} (${lines} lines)`);
+        if (!confirmed) return { block: true, reason: "Blocked by user" };
+      } else {
+        const confirmed = await ctx.ui.confirm("Edit file?", rawPath);
+        if (!confirmed) return { block: true, reason: "Blocked by user" };
+      }
 
     } else if (toolName === "bash") {
-      if (yolo.mode === "full") return undefined;
+      if (yolo.mode === "yolo") return undefined;
       if (!ctx.hasUI) return { block: true, reason: "Blocked by user" };
 
       const command = event.input.command as string;

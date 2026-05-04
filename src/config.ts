@@ -123,10 +123,20 @@ function loadJsonFile(path: string): Partial<NoloConfig> | null {
   }
 }
 
+export const DEFAULT_PROTECTED_PATHS = [
+  ".env",
+  ".env.local",
+  ".env.production",
+  ".git/",
+  "node_modules/",
+  ".venv/",
+];
+
 export interface LoadedConfig {
   safePrefixes: string[];
   dangerousRegexes: RegExp[];
   segmentDangerousRegexes: RegExp[];
+  protectedPaths: string[];
 }
 
 export function loadConfig(): LoadedConfig {
@@ -159,9 +169,19 @@ export function loadConfig(): LoadedConfig {
     segmentDangerousPatterns = projectCfg.segmentDangerousPatterns;
   }
 
+  // Protected paths: union of defaults + global + project
+  let protectedPaths = [...DEFAULT_PROTECTED_PATHS];
+  if (globalCfg?.protectedPaths) {
+    protectedPaths = [...new Set([...protectedPaths, ...globalCfg.protectedPaths])];
+  }
+  if (projectCfg?.protectedPaths) {
+    protectedPaths = [...new Set([...protectedPaths, ...projectCfg.protectedPaths])];
+  }
+
   return {
     safePrefixes,
     dangerousRegexes: dangerousPatterns.map((p) => new RegExp(p)),
     segmentDangerousRegexes: segmentDangerousPatterns.map((p) => new RegExp(p)),
+    protectedPaths,
   };
 }
