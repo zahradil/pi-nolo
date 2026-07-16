@@ -18,7 +18,7 @@
  * Protected paths (.env, .git/, node_modules/, etc.) are always blocked regardless of mode.
  */
 
-import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import * as nodePath from "node:path";
 import { loadConfig, DEFAULT_SAFE_PREFIXES, DEFAULT_DANGEROUS_PATTERNS, DEFAULT_SEGMENT_DANGEROUS_PATTERNS } from "./src/config.js";
 import { isSafeCommand } from "./src/safety.js";

@@ -3,9 +3,9 @@
  * Ported from pi-pre-render-edit.
  */
 
-import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
-import { renderDiff, createEditToolDefinition } from "@mariozechner/pi-coding-agent";
-import { Text, Container, type Component } from "@mariozechner/pi-tui";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { renderDiff, createEditToolDefinition } from "@earendil-works/pi-coding-agent";
+import { Text, Container, type Component } from "@earendil-works/pi-tui";
 import * as Diff from "diff";
 import { constants } from "node:fs";
 import { access, readFile } from "node:fs/promises";

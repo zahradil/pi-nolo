@@ -1,4 +1,4 @@
-import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { YOLO_MODES, YOLO_LABELS, YOLO_ENTRY_TYPE } from "./types.js";
 import type { YoloMode } from "./types.js";
 
